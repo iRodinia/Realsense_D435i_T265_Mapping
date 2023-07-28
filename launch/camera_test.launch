@@ -54,23 +54,19 @@
     </include>
   </group>
 
-  <node pkg="tf" type="static_transform_publisher" name="t265_to_d400" args="-0.006 0.033 -0.013 0 0 3.14159 /$(arg tf_prefix_camera1)_link /$(arg tf_prefix_camera2)_link 100"/>
+  <node pkg="tf" type="static_transform_publisher" name="t265_to_d400" args="-0.006 0.033 -0.013 0 1.57 0 /$(arg tf_prefix_camera1)_link /$(arg tf_prefix_camera2)_link 100"/>
 
-  <arg name="map_size_x_" default="20.0"/>
-  <arg name="map_size_y_" default="15.0"/>
+  <arg name="map_size_x_" default="5.0"/>
+  <arg name="map_size_y_" default="5.0"/>
   <arg name="map_size_z_" default="4.0"/>
-  <arg name="local_range_x_" default="4.0"/>
-  <arg name="local_range_y_" default="4.0"/>
-  <arg name="local_range_z_" default="3.0"/>
+  <arg name="local_range_" default="3.0"/>
 
   <group ns="grid_map">
-    <param name="resolution"   value="0.1" /> 
+    <param name="resolution"   value="0.05" /> 
     <param name="map_size_x"   value="$(arg map_size_x_)" /> 
     <param name="map_size_y"   value="$(arg map_size_y_)" /> 
     <param name="map_size_z"   value="$(arg map_size_z_)" /> 
-    <param name="local_update_range_x"  value="$(arg local_range_x_)" /> 
-    <param name="local_update_range_y"  value="$(arg local_range_y_)" /> 
-    <param name="local_update_range_z"  value="$(arg local_range_z_)" /> 
+    <param name="local_update_range_"  value="$(arg local_range_)" /> 
     <param name="obstacles_inflation"   value="0.099" />
     <param name="p_occ"                 value="0.50"/>
     <param name="visualization_truncate_height"   value="2.4"/>

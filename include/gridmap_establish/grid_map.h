@@ -45,7 +45,7 @@ struct MappingParameters {
   double virtual_ceil_height_, ground_height_;
   Eigen::Vector3d map_min_boundary_, map_max_boundary_;  // map range in pos
   Eigen::Vector3i map_voxel_num_;                        // map range in index
-  Eigen::Vector3d local_update_range_;
+  double local_update_range_;
   double resolution_, resolution_inv_;
   double obstacles_inflation_;
   string local_frame_id_, global_frame_id_;
@@ -61,8 +61,7 @@ struct MappingData {
   // main map data, occupancy of each voxel and Euclidean distance
   std::vector<double> known_map_buffer_;
   std::vector<char> occupancy_buffer_inflate_;
-
-  pcl::PointCloud<pcl::PointXYZ>::Ptr orig_cloud_ptr, sampled_cloud_ptr, free_cloud_ptr;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr orig_cloud_ptr, sampled_cloud_ptr, free_cloud_ptr, free_sampled_ptr;
 
   // camera position and pose data
   Eigen::Vector3d camera_pos_, last_camera_pos_;

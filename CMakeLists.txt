@@ -136,6 +136,9 @@ link_directories(${PCL_LIBRARY_DIRS})
 add_library(grid
   src/grid_map.cpp
 )
+add_library(raycast
+  src/raycaster.cpp
+)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
@@ -160,6 +163,7 @@ add_executable(gridmap_node src/gridmap_establish.cpp)
 ## Specify libraries to link a library or executable target against
 target_link_libraries(gridmap_node
   grid
+  raycast
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )

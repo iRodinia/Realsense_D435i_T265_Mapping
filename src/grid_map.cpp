@@ -1,3 +1,4 @@
+#include "gridmap_establish/raycaster.h"
 #include "gridmap_establish/grid_map.h"
 
 GridMap::GridMap(ros::NodeHandle* nh):node_(*nh)
@@ -8,9 +9,7 @@ GridMap::GridMap(ros::NodeHandle* nh):node_(*nh)
   node_.param("map_size_x", x_size, -1.0);
   node_.param("map_size_y", y_size, -1.0);
   node_.param("map_size_z", z_size, -1.0);
-  node_.param("local_update_range_x", mp_.local_update_range_(0), -1.0);
-  node_.param("local_update_range_y", mp_.local_update_range_(1), -1.0);
-  node_.param("local_update_range_z", mp_.local_update_range_(2), -1.0);
+  node_.param("local_update_range", mp_.local_update_range_, 2.0);
   node_.param("obstacles_inflation", mp_.obstacles_inflation_, -1.0);
   node_.param("p_occ", mp_.p_occ_, 0.50);
   node_.param("visualization_truncate_height", mp_.visualization_truncate_height_, 999.0);
@@ -33,10 +32,6 @@ GridMap::GridMap(ros::NodeHandle* nh):node_(*nh)
   int buffer_size = mp_.map_voxel_num_(0) * mp_.map_voxel_num_(1) * mp_.map_voxel_num_(2);
   md_.known_map_buffer_ = vector<double>(buffer_size, 0);
   md_.occupancy_buffer_inflate_ = vector<char>(buffer_size, -1);
-  md_.cam2body_ << 0.0, 0.0, 1.0, 0.0,
-      -1.0, 0.0, 0.0, 0.0,
-      0.0, -1.0, 0.0, -0.02,
-      0.0, 0.0, 0.0, 1.0;
 
   // use odometry and point cloud
   indep_cloud_sub_ =
@@ -47,6 +42,7 @@ GridMap::GridMap(ros::NodeHandle* nh):node_(*nh)
   md_.orig_cloud_ptr = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>());
   md_.sampled_cloud_ptr = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>());
   md_.free_cloud_ptr = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>());
+  md_.free_sampled_ptr = pcl::PointCloud<pcl::PointXYZ>::Ptr(new pcl::PointCloud<pcl::PointXYZ>());
   downSizeFilter.setLeafSize(mp_.resolution_, mp_.resolution_, mp_.resolution_);
 
   vis_local_timer_ = node_.createTimer(ros::Duration(0.05), &GridMap::visLocalMapCallback, this);
@@ -173,7 +169,7 @@ void GridMap::odomCallback(const nav_msgs::OdometryConstPtr &odom)
     md_.has_odom_ = true;
   }
   catch (tf::TransformException &ex) {
-    ROS_ERROR("%s",ex.what());
+    ROS_WARN("%s",ex.what());
     md_.has_odom_ = false;
   }
 }
@@ -186,54 +182,82 @@ void GridMap::cloudCallback(const sensor_msgs::PointCloud2ConstPtr &img)
     ROS_INFO("No odom!");
     return;
   }
+  md_.orig_cloud_ptr->clear();
   pcl::fromROSMsg(*img, *md_.orig_cloud_ptr);
+  if (md_.orig_cloud_ptr->points.size() == 0)
+    return;
+
+  md_.sampled_cloud_ptr->clear();
+  downSizeFilter.setInputCloud(md_.orig_cloud_ptr);
+  downSizeFilter.filter(*md_.sampled_cloud_ptr);
+
+  md_.free_cloud_ptr->clear();
+  RayCaster raycaster;
+  Eigen::Vector3d half = Eigen::Vector3d(0.5, 0.5, 0.5);
+  pcl::PointXYZ pt, ray_pt;
+  Eigen::Vector3d p3d, ray_p3d;
+  for (size_t i = 0; i < md_.sampled_cloud_ptr->points.size(); ++i)
+  {
+    pt = md_.sampled_cloud_ptr->points[i];
+    p3d(0) = pt.x; p3d(1) = pt.y; p3d(2) = pt.z;
+    raycaster.setInput(p3d / mp_.resolution_, Eigen::Vector3d::Zero());
+    while (raycaster.step(ray_p3d))
+    {
+      Eigen::Vector3d tmp = (ray_p3d + half) * mp_.resolution_;
+      if(tmp.norm() <= mp_.local_update_range_)
+      {
+        ray_pt.x = tmp(0); ray_pt.y = tmp(1); ray_pt.z = tmp(2);
+        md_.free_cloud_ptr->push_back(ray_pt);
+      }
+    }
+  }
+
+  md_.free_sampled_ptr->clear();
+  downSizeFilter.setInputCloud(md_.free_cloud_ptr);
+  downSizeFilter.filter(*md_.free_sampled_ptr);
 
   pcl::PointCloud<pcl::PointXYZ> sampled_cloud_tf, free_cloud_tf;
-  
-  if (orig_cloud_ptr.points.size() == 0)
-    return;
-  if (isnan(md_.camera_pos_(0)) || isnan(md_.camera_pos_(1)) || isnan(md_.camera_pos_(2)))
-    return;
-  
-  sampled_cloud_ptr.clear();
-  downSizeFilter.setInputCloud(orig_cloud_ptr);
+  pcl_ros::transformPointCloud(*md_.sampled_cloud_ptr, sampled_cloud_tf, md_.cam2world_tf_);
+  pcl_ros::transformPointCloud(*md_.free_sampled_ptr, free_cloud_tf, md_.cam2world_tf_);
 
-  pcl_ros::transformPointCloud(orig_cloud_ptr, free_cloud_ptr, md_.cam2world_tf_);
-
-  // this->resetBuffer(md_.camera_pos_ - mp_.local_update_range_,
-  //                   md_.camera_pos_ + mp_.local_update_range_);   // Reset region should be smaller than sensor detected area
+  pcl::PointXYZ tf_pt;
+  Eigen::Vector3d tf_p3d;
+  Eigen::Vector3i tf_p3d_idx;
+  for (size_t i = 0; i < free_cloud_tf.points.size(); ++i)
+  {
+    tf_pt = free_cloud_tf.points[i];
+    tf_p3d(0) = tf_pt.x; tf_p3d(1) = tf_pt.y; tf_p3d(2) = tf_pt.z;
+    posToIndex(tf_p3d, tf_p3d_idx);
+    if (!isInMap(tf_p3d_idx))
+      continue;
+    md_.occupancy_buffer_inflate_[toAddress(tf_p3d_idx)] = 0.0;
+  }
 
   int inf_step = ceil(mp_.obstacles_inflation_ / mp_.resolution_);
   int inf_step_z = ceil(inf_step / 2);  // height inflation is not correct
-
-  pcl::PointXYZ pt;
-  Eigen::Vector3d p3d;
-  for (size_t i = 0; i < free_cloud_ptr.points.size(); ++i)
+  for(size_t i = 0; i < sampled_cloud_tf.points.size(); ++i)
   {
-    pt = free_cloud_ptr.points[i];
-    p3d(0) = pt.x;
-    p3d(1) = pt.y;
-    p3d(2) = pt.z;
-    /* point inside update range */
-    Eigen::Vector3d devi = p3d - md_.camera_pos_;
-    Eigen::Vector3d inf_pt;
-    Eigen::Vector3i inf_pt_idx;
-    if (fabs(devi(0)) < mp_.local_update_range_(0) && fabs(devi(1)) < mp_.local_update_range_(1) &&
-        fabs(devi(2)) < mp_.local_update_range_(2))
+    tf_pt = sampled_cloud_tf.points[i];
+    tf_p3d(0) = tf_pt.x; tf_p3d(1) = tf_pt.y; tf_p3d(2) = tf_pt.z;
+    posToIndex(tf_p3d, tf_p3d_idx);
+    if(!isInMap(tf_p3d_idx) || (tf_p3d - md_.camera_pos_).norm() > mp_.local_update_range_)
     {
-      /* inflate the point */
+      continue;
+    }
+    else
+    {
+      Eigen::Vector3d inf_pt;
+      Eigen::Vector3i inf_pt_idx;
       for (int x = -inf_step; x <= inf_step; ++x)
         for (int y = -inf_step; y <= inf_step; ++y)
           for (int z = -inf_step_z; z <= inf_step_z; ++z)
           {
-            inf_pt(0) = p3d(0) + x * mp_.resolution_;
-            inf_pt(1) = p3d(1) + y * mp_.resolution_;
-            inf_pt(2) = p3d(2) + z * mp_.resolution_;
+            inf_pt(0) = tf_p3d(0) + x * mp_.resolution_;
+            inf_pt(1) = tf_p3d(1) + y * mp_.resolution_;
+            inf_pt(2) = tf_p3d(2) + z * mp_.resolution_;
             posToIndex(inf_pt, inf_pt_idx);
-
             if (!isInMap(inf_pt_idx))
               continue;
-
             md_.occupancy_buffer_inflate_[toAddress(inf_pt_idx)] = 1;
           }
     }
