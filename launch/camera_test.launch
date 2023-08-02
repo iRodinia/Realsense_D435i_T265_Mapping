@@ -59,7 +59,7 @@
   <arg name="map_size_x_" default="5.0"/>
   <arg name="map_size_y_" default="5.0"/>
   <arg name="map_size_z_" default="4.0"/>
-  <arg name="local_range_" default="3.0"/>
+  <arg name="local_range_" default="2.0"/>
 
   <group ns="grid_map">
     <param name="resolution"   value="0.05" /> 

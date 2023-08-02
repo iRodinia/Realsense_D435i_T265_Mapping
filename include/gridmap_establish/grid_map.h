@@ -3,25 +3,11 @@
 
 #include <ros/ros.h>
 #include <Eigen/Eigen>
-#include <Eigen/StdVector>
-#include <geometry_msgs/PoseStamped.h>
-#include <nav_msgs/Odometry.h>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/voxel_grid.h>
-// #include <pcl/filters/statistical_outlier_removal.h>
-
-#include <message_filters/subscriber.h>
-#include <message_filters/sync_policies/approximate_time.h>
-#include <message_filters/sync_policies/exact_time.h>
-#include <message_filters/time_synchronizer.h>
-
-#include <tf/transform_listener.h>
-
-#include <pcl_ros/point_cloud.h>
-#include <pcl_ros/transforms.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 using namespace std;
 
@@ -45,38 +31,22 @@ struct MappingParameters {
   double virtual_ceil_height_, ground_height_;
   Eigen::Vector3d map_min_boundary_, map_max_boundary_;  // map range in pos
   Eigen::Vector3i map_voxel_num_;                        // map range in index
-  double local_update_range_;
   double resolution_, resolution_inv_;
   double obstacles_inflation_;
-  string local_frame_id_, global_frame_id_;
-  int pose_type_;
-  double p_occ_;                               // occupancy probability
-
+  string point_cloud_topic_, global_frame_id_;
+  double threshold;                               // occupancy probability
   /* visualization and computation time display */
   double visualization_truncate_height_;
 };
 
 // mapping data
 struct MappingData {
-  // main map data, occupancy of each voxel and Euclidean distance
-  std::vector<double> known_map_buffer_;
-  std::vector<char> occupancy_buffer_inflate_;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr orig_cloud_ptr, sampled_cloud_ptr, free_cloud_ptr, free_sampled_ptr;
-
-  // camera position and pose data
-  Eigen::Vector3d camera_pos_, last_camera_pos_;
-  Eigen::Quaterniond camera_q_, last_camera_q_;
-  Eigen::Matrix4d cam2body_;
-  tf::StampedTransform cam2world_tf_;
-
-  // flags of map state
-  bool has_odom_, has_cloud_;
-
-  // range of updating grid
-  Eigen::Vector3i local_bound_min_, local_bound_max_;
-
+  // main map data, occupancy of each voxel
+  std::vector<double> occupancy_buffer_inflate_;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr map_cloud, map_unknown;
   // computation time
-  double fuse_time_, max_fuse_time_;
+  double map_update_time_;
+  bool has_cloud;
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
@@ -89,10 +59,6 @@ public:
   ~GridMap(){}
 
   enum { POSE_STAMPED = 1, ODOMETRY = 2, INVALID_IDX = -10000 };
-
-  // occupancy map management
-  void resetBuffer();
-  void resetBuffer(Eigen::Vector3d min, Eigen::Vector3d max);
 
   inline void posToIndex(const Eigen::Vector3d& pos, Eigen::Vector3i& id);
   inline void indexToPos(const Eigen::Vector3i& id, Eigen::Vector3d& pos);
@@ -113,7 +79,6 @@ public:
   inline bool isKnownFree(const Eigen::Vector3i& id);
   inline bool isKnownOccupied(const Eigen::Vector3i& id);
 
-  bool odomValid();
   void getRegion(Eigen::Vector3d& ori, Eigen::Vector3d& size);
   inline double getResolution();
   Eigen::Vector3d getOrigin();
@@ -127,25 +92,17 @@ private:
   MappingData md_;
 
   ros::NodeHandle node_;
-  ros::Subscriber indep_cloud_sub_, indep_odom_sub_;
-  ros::Publisher known_map_pub_, local_map_pub_, map_inf_pub_, unknown_pub_;
-  ros::Timer vis_local_timer_, vis_global_timer_;
+  ros::Subscriber world_cloud_sub_;
+  ros::Publisher grid_map_pub_, unknown_map_pub_;
+  ros::Timer vis_timer_;
 
   pcl::VoxelGrid<pcl::PointXYZ> downSizeFilter;
 
-  tf::TransformListener listener;
+  void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& msg);
 
-  void cloudCallback(const sensor_msgs::PointCloud2ConstPtr& img);
-  void odomCallback(const nav_msgs::OdometryConstPtr& odom);
+  void visMapCallback(const ros::TimerEvent& /*event*/);
 
-  // visualization
-  void visKnownMapCallback(const ros::TimerEvent& /*event*/);
-  void visLocalMapCallback(const ros::TimerEvent& /*event*/);
-  void visGlobalMapCallback(const ros::TimerEvent& /*event*/);
-  void visUnknownMapCallback(const ros::TimerEvent& /*event*/);
-
-  // main update process
-  void clearAndInflateLocalMap();
+  void clearMap();
 
   inline void inflatePoint(const Eigen::Vector3i& pt, int step, vector<Eigen::Vector3i>& pts);
 };
@@ -173,7 +130,7 @@ inline bool GridMap::isUnknown(const Eigen::Vector3i& id) {
   Eigen::Vector3i id1 = id;
   boundIndex(id1);
   int adr = toAddress(id1);
-  return md_.known_map_buffer_[adr] == 0 && md_.occupancy_buffer_inflate_[adr] < 0;
+  return md_.occupancy_buffer_inflate_[adr] < 0;
 }
 
 inline bool GridMap::isUnknown(const Eigen::Vector3d& pos) {
@@ -186,22 +143,22 @@ inline bool GridMap::isKnownFree(const Eigen::Vector3i& id) {
   Eigen::Vector3i id1 = id;
   boundIndex(id1);
   int adr = toAddress(id1);
-  return md_.known_map_buffer_[adr] == 0 && md_.occupancy_buffer_inflate_[adr] >= 0 && md_.occupancy_buffer_inflate_[adr] < mp_.p_occ_;
+  return md_.occupancy_buffer_inflate_[adr] >= 0 && md_.occupancy_buffer_inflate_[adr] < mp_.threshold;
 }
 
 inline bool GridMap::isKnownOccupied(const Eigen::Vector3i& id) {
   Eigen::Vector3i id1 = id;
   boundIndex(id1);
   int adr = toAddress(id1);
-  return md_.known_map_buffer_[adr] == 1 || md_.occupancy_buffer_inflate_[adr] >= mp_.p_occ_;
+  return md_.occupancy_buffer_inflate_[adr] >= mp_.threshold;
 }
 
 inline void GridMap::setOccupied(Eigen::Vector3d pos) {
   if (!isInMap(pos)) return;
   Eigen::Vector3i id;
   posToIndex(pos, id);
-  md_.occupancy_buffer_inflate_[id(0) * mp_.map_voxel_num_(1) * mp_.map_voxel_num_(2) +
-                                id(1) * mp_.map_voxel_num_(2) + id(2)] = 1;
+  int adr = toAddress(id);
+  md_.occupancy_buffer_inflate_[adr] = 1;
 }
 
 inline void GridMap::setOccupancy(Eigen::Vector3d pos, double occ) {
@@ -209,18 +166,18 @@ inline void GridMap::setOccupancy(Eigen::Vector3d pos, double occ) {
     cout << "occ value error!" << endl;
     return;
   }
-
   if (!isInMap(pos)) return;
   Eigen::Vector3i id;
   posToIndex(pos, id);
-  md_.known_map_buffer_[toAddress(id)] = occ;
+  int adr = toAddress(id);
+  md_.occupancy_buffer_inflate_[adr] = occ;
 }
 
 inline int GridMap::getOccupancy(Eigen::Vector3d pos) {
   if (!isInMap(pos)) return -1;
   Eigen::Vector3i id;
   posToIndex(pos, id);
-  return md_.known_map_buffer_[toAddress(id)] >= mp_.p_occ_ ? 1 : 0;
+  return md_.occupancy_buffer_inflate_[toAddress(id)] >= mp_.threshold ? 1 : 0;
 }
 
 inline int GridMap::getInflateOccupancy(Eigen::Vector3d pos) {
@@ -231,11 +188,8 @@ inline int GridMap::getInflateOccupancy(Eigen::Vector3d pos) {
 }
 
 inline int GridMap::getOccupancy(Eigen::Vector3i id) {
-  if (id(0) < 0 || id(0) >= mp_.map_voxel_num_(0) || id(1) < 0 || id(1) >= mp_.map_voxel_num_(1) ||
-      id(2) < 0 || id(2) >= mp_.map_voxel_num_(2))
-    return -1;
-
-  return md_.known_map_buffer_[toAddress(id)] >= mp_.p_occ_ ? 1 : 0;
+  if (!isInMap(id)) return -1;
+  return md_.occupancy_buffer_inflate_[toAddress(id)] >= mp_.threshold ? 1 : 0;
 }
 
 inline bool GridMap::isInMap(const Eigen::Vector3d& pos) {
@@ -280,5 +234,12 @@ inline void GridMap::inflatePoint(const Eigen::Vector3i& pt, int step, vector<Ei
 }
 
 inline double GridMap::getResolution() { return mp_.resolution_; }
+
+Eigen::Vector3d GridMap::getOrigin() { return mp_.map_origin_; }
+
+void GridMap::getRegion(Eigen::Vector3d &ori, Eigen::Vector3d &size)
+{
+  ori = mp_.map_origin_, size = mp_.map_size_;
+}
 
 #endif

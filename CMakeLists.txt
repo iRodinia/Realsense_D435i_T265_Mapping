@@ -12,12 +12,9 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g")
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  geometry_msgs
   roscpp
   std_msgs
-  visualization_msgs
-  message_filters
-  pcl_ros
+  sensor_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -113,7 +110,7 @@ find_package(PCL REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp std_msgs pcl_ros
+  CATKIN_DEPENDS roscpp std_msgs sensor_msgs
 #  DEPENDS system_lib
 )
 
