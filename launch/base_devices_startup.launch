@@ -14,7 +14,7 @@
   <arg name="color_height"              default="480"/>
   <arg name="depth_width"               default="640"/>
   <arg name="depth_height"              default="480"/>
-  <arg name="clip_distance"             default="-2"/>
+  <arg name="clip_distance"             default="5.0"/>
   <arg name="topic_odom_in"             default="odom_in"/>
   <arg name="calib_odom_file"           default=""/>
 

@@ -6,7 +6,9 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
-        - /PointCloud21
+        - /PointCloud21/Status1
+        - /PointCloud22
+        - /PointCloud22/Status1
       Splitter Ratio: 0.5
     Tree Height: 719
   - Class: rviz/Selection
@@ -59,7 +61,7 @@ Visualization Manager:
         Min Value: -10
         Value: true
       Axis: Z
-      Channel Name: y
+      Channel Name: z
       Class: rviz/PointCloud2
       Color: 255; 255; 255
       Color Transformer: Intensity
@@ -73,12 +75,30 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.029999999329447746
+      Size (m): 0.05000000074505806
       Style: Boxes
-      Topic: /grid_map/occupancy_inflate
+      Topic: /grid_map/known_map
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Class: rviz/Axes
+      Enabled: true
+      Length: 0.20000000298023224
+      Name: Axes
+      Radius: 0.05000000074505806
+      Reference Frame: d400_aligned_depth_to_color_frame
+      Show Trail: false
+      Value: true
+    - Alpha: 1
+      Class: rviz/Axes
+      Enabled: true
+      Length: 1
+      Name: Axes
+      Radius: 0.019999999552965164
+      Reference Frame: map
+      Show Trail: false
       Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
@@ -92,7 +112,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: RGB8
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -103,34 +123,16 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.009999999776482582
       Style: Flat Squares
-      Topic: /d400/depth/color/points
+      Topic: /rtabmap/cloud_map
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
-    - Alpha: 1
-      Class: rviz/Axes
-      Enabled: true
-      Length: 1
-      Name: Axes
-      Radius: 0.10000000149011612
-      Reference Frame: t265_odom_frame
-      Show Trail: false
-      Value: true
-    - Alpha: 1
-      Class: rviz/Axes
-      Enabled: true
-      Length: 1
-      Name: Axes
-      Radius: 0.10000000149011612
-      Reference Frame: t265_pose_frame
-      Show Trail: false
       Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
     Default Light: true
-    Fixed Frame: t265_odom_frame
+    Fixed Frame: map
     Frame Rate: 30
   Name: root
   Tools:
@@ -154,7 +156,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.4071557521820068
+      Distance: 11.138416290283203
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -162,17 +164,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0
-        Y: 0
-        Z: 0
+        X: -0.28052669763565063
+        Y: -2.041844606399536
+        Z: 0.8373000025749207
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5253981947898865
+      Pitch: 0.13539856672286987
       Target Frame: <Fixed Frame>
-      Yaw: 4.698563575744629
+      Yaw: 0.3285107910633087
     Saved: ~
 Window Geometry:
   Displays:

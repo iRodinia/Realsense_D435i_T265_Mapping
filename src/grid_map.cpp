@@ -42,8 +42,8 @@ GridMap::GridMap(ros::NodeHandle* nh):node_(*nh)
 
   vis_timer_ = node_.createTimer(ros::Duration(0.1), &GridMap::visMapCallback, this);
 
-  grid_map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/known_map", 10);
-  unknown_map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("/grid_map/unknown_map", 10);
+  grid_map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("known_map", 10);
+  unknown_map_pub_ = node_.advertise<sensor_msgs::PointCloud2>("unknown_map", 10);
 
   md_.map_update_time_ = 0.0;
 }
