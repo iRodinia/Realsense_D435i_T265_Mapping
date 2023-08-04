@@ -1,0 +1,62 @@
+<launch>
+
+    <arg name="device_type_camera1"    		default="t265"/>
+    <arg name="device_type_camera2"    		default="d435i"/>	<!-- Note: using regular expression. match D435, D435i, D415... -->
+    <arg name="serial_no_camera1"    		default=""/>
+    <arg name="serial_no_camera2"    		default=""/>
+    <arg name="camera1"              		default="t265"/>		<!-- Note: Replace with camera name -->
+    <arg name="camera2"              		default="d400"/>		<!-- Note: Replace with camera name -->
+    <arg name="clip_distance"               default="5.0"/>
+
+    <arg name="map_size_x_" default="5.0"/>
+    <arg name="map_size_y_" default="5.0"/>
+    <arg name="map_size_z_" default="4.0"/>
+    
+    <include file="$(find gridmap_establish)/launch/base_devices_startup.launch">
+        <arg name="device_type_camera1"             value="$(arg device_type_camera1)"/>
+        <arg name="device_type_camera2"             value="$(arg device_type_camera2)"/>
+        <arg name="serial_no_camera1"               value="$(arg serial_no_camera1)"/>
+        <arg name="serial_no_camera2"               value="$(arg serial_no_camera2)"/>
+        <arg name="camera1"                         value="$(arg camera1)"/>
+        <arg name="camera2"                         value="$(arg camera2)"/>
+        <arg name="clip_distance"                   value="$(arg clip_distance)"/>
+    </include>
+
+    <include file="$(find rtabmap_ros)/launch/rtabmap.launch">
+        <arg name="rtabmap_args"       value="--delete_db_on_start"/>
+        <arg name="map_frame_id"       value="map"/>
+        <arg name="camera_info_topic"  value="/$(arg camera2)/color/camera_info"/>
+        <arg name="depth_topic"        value="/$(arg camera2)/aligned_depth_to_color/image_raw"/>
+        <arg name="rgb_topic"          value="/$(arg camera2)/color/image_raw"/>
+        <arg name="odom_topic"         value="/$(arg camera1)/odom/sample"/>
+        <arg name="frame_id"           value="$(arg camera2)_aligned_depth_to_color_frame"/>
+        <arg name="visual_odometry"    value="false"/>     <!-- Turn off visual odometry (vo) -->
+        <arg name="publish_tf_odom"    value="false"/>
+        <arg name="queue_size"         value="100"/>
+        <arg name="rviz"               value="false"/>
+        <arg name="rtabmapviz"         value="false"/>
+
+        <param name="Grid/CellSize"    type="string"   value="0.08" />
+        <param name="Grid/RayTracing"  type="string"   value="true" />
+        <param name="Rtabmap/DetectionRate"  type="string"   value="5" />
+    </include>
+
+    <group ns="grid_map">
+        <param name="resolution"                value="0.05" /> 
+        <param name="map_size_x"                value="$(arg map_size_x_)" /> 
+        <param name="map_size_y"                value="$(arg map_size_y_)" /> 
+        <param name="map_size_z"                value="$(arg map_size_z_)" /> 
+        <param name="obstacles_inflation"       value="0.099" />
+        <param name="threshold"                 value="0.50"/>
+        <param name="visualization_truncate_height"   value="2.4"/>
+        <param name="virtual_ceil_height"       value="2.5"/>
+        <param name="point_cloud_topic"         value="/rtabmap/cloud_map"/>
+        <param name="global_frame_id"           value="map"/>
+        <param name="ground_height"             value="-0.5"/>
+
+        <node pkg="gridmap_establish" name="gridmap_node" type="gridmap_node" output="screen"/>
+    </group>
+
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find gridmap_establish)/rviz_config/rviz.rviz" required="true" />
+
+</launch>
